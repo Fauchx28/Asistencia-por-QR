@@ -9,6 +9,20 @@ Funciona en celulares y computadores.
 - **Lista del día:** corrige estados a mano y cierra el día (los no registrados quedan ausentes).
 - **Resumen semanal:** tabla de lunes a viernes, descarga en Excel y envío automático por correo cada viernes.
 
+## Cuentas y sesiones (v2)
+
+- **Primera vez:** el docente entra a la plataforma y elige **Crear cuenta** (nombre, correo y contraseña). Si defines
+  `REGISTRATION_CODE`, también debe escribir el código del colegio, así solo se registran tus docentes.
+  Para cerrar el registro por completo usa `ALLOW_REGISTRATION=false`.
+- **Ingresar:** con correo y contraseña. Por defecto la sesión dura hasta cerrar el navegador (o 12 h sin uso).
+  Con **Recordarme en este dispositivo** dura 30 días desde el último uso; no conviene en computadores compartidos.
+- **Volver donde estaba:** si la sesión vence en medio del trabajo, al ingresar de nuevo regresa a la misma página.
+- **Mi cuenta** (icono con tus iniciales en el celular, o tu nombre en el menú lateral): cambiar nombre y contraseña,
+  ver los dispositivos con sesión abierta y cerrar cualquiera de ellos o todos los demás. Cambiar la contraseña cierra las demás sesiones.
+- **Olvidé mi contraseña:** envía un enlace por correo que vence en 1 hora y sirve una sola vez. Requiere SMTP y `APP_URL`.
+- **Protección:** tras 5 intentos fallidos con el mismo correo desde la misma red, el ingreso se bloquea 15 minutos.
+  La cookie solo guarda un token aleatorio; en la base de datos se guarda su hash. Se rechazan peticiones desde otros sitios (CSRF).
+
 ## Requisitos
 
 - **Node.js 22.13 o superior** (usa la base de datos SQLite integrada en Node, no hay que instalar nada más).
@@ -31,7 +45,7 @@ Para desarrollo con recarga automática: `npm run dev`. Pruebas: `npm test`.
 Los navegadores solo permiten la cámara en **https** o en `localhost`. Para probar desde tu celular en la misma red:
 
 - **Rápido:** usa un túnel con HTTPS, por ejemplo `npx cloudflared tunnel --url http://localhost:3000` o `ngrok http 3000`, y abre en el celular la dirección `https://…` que te da.
-- **En producción:** publícalo en un hosting con HTTPS (Render, Railway, un VPS con Nginx + Let's Encrypt…) y pon `TRUST_PROXY=true` y `COOKIE_SECURE=true` en el `.env`.
+- **En producción:** publícalo en un hosting con HTTPS (Render, Railway, un VPS con Nginx + Let's Encrypt…) y pon `TRUST_PROXY=true`, `COOKIE_SECURE=true` y `APP_URL=https://tu-dominio` en el `.env`.
 
 ## Correo semanal
 
@@ -54,7 +68,7 @@ vuelva a encender ese mismo día. Nunca envía dos veces la misma semana. Tambi�
 ## Seguridad y datos
 
 - El QR contiene solo un token aleatorio, no datos del estudiante. Si un carné se pierde, "Generar nuevo QR" invalida el anterior.
-- Cada docente solo ve sus cursos. Contraseñas con `scrypt`; sesión en cookie `HttpOnly`.
+- Cada docente solo ve sus cursos. Contraseñas con `scrypt`; sesión en cookie `HttpOnly` (ver "Cuentas y sesiones").
 - Quitar un estudiante lo oculta de las listas pero conserva su historial.
 - Toda la información queda en `data/asistencia.db`: haz copia de ese archivo regularmente.
 
@@ -63,7 +77,8 @@ vuelva a encender ese mismo día. Nunca envía dos veces la misma semana. Tambi�
 ```
 server.js                 Arranque del servidor Express
 src/db.js                 Esquema SQLite
-src/auth.js               Cuentas y sesiones
+src/auth.js               Cuentas, sesiones, límite de intentos y recuperación de contraseña
+src/mailer.js             Envío de correos (SMTP)
 src/api.js                Rutas /api
 src/scheduler.js          Envío automático semanal
 src/util.js               Fechas, CSV y limpieza de nombres
@@ -81,7 +96,13 @@ test/                     Pruebas de la lógica
 
 | Método | Ruta | Uso |
 |---|---|---|
-| POST | `/api/auth/register` · `/api/auth/login` · `/api/auth/logout` | Cuenta |
+| POST | `/api/auth/register` · `/api/auth/login` · `/api/auth/logout` | Registro e ingreso (`remember: true` = recordarme) |
+| GET | `/api/auth/me` | Docente de la sesión actual y configuración pública |
+| POST | `/api/auth/forgot` · `/api/auth/reset` | Recuperar contraseña |
+| GET/PUT | `/api/account` | Mi cuenta (perfil y sesiones abiertas) |
+| PUT | `/api/account/password` | Cambiar contraseña |
+| DELETE | `/api/account/sessions/:id` | Cerrar una sesión de otro dispositivo |
+| POST | `/api/account/sessions/close-others` | Cerrar todas las demás sesiones |
 | GET/POST | `/api/courses` | Listar / crear curso (con `students`) |
 | GET/PUT/DELETE | `/api/courses/:id` | Ver / editar / eliminar curso |
 | POST | `/api/import` | Leer lista (archivo `file` o `{ text }`); no guarda nada |

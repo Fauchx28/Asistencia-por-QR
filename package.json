@@ -1,6 +1,6 @@
 {
   "name": "asistencia-qr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Gestión de asistencia escolar con lectura de códigos QR",
   "main": "server.js",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/services.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test test/services.test.js test/auth.test.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

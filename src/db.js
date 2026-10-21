@@ -15,10 +15,27 @@ CREATE TABLE IF NOT EXISTS teachers (
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS sessions (
-  token      TEXT PRIMARY KEY,
+-- v1 guardaba el token en texto plano; v2 guarda solo su hash.
+DROP TABLE IF EXISTS sessions;
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id          TEXT PRIMARY KEY,           -- identificador público (para listar y cerrar sesiones)
+  token_hash  TEXT NOT NULL UNIQUE,       -- sha256 del token de la cookie
+  teacher_id  INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  persistent  INTEGER NOT NULL DEFAULT 0, -- 1 = "Recordarme en este dispositivo"
+  user_agent  TEXT,
+  ip          TEXT,
+  created_at  INTEGER NOT NULL,           -- milisegundos epoch
+  last_seen   INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_teacher ON auth_sessions(teacher_id);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,
   teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-  expires_at INTEGER NOT NULL
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS courses (
@@ -81,6 +98,13 @@ function openDatabase(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+
+  // Migraciones simples: agrega columnas nuevas a bases de datos de versiones anteriores.
+  const addColumn = (table, column, def) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+  };
+  addColumn('teachers', 'last_login_at', 'INTEGER');
 
   // Ejecuta fn dentro de una transacción; revierte si lanza un error.
   db.transaction = (fn) => {

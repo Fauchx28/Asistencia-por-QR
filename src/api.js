@@ -4,6 +4,8 @@ const multer = require('multer');
 const { HttpError } = require('./util');
 const { qrPng, writeCardsPdf, writeQrZip, safeFile } = require('./services/qr');
 const { importStudents } = require('./services/importer');
+const { clientIp } = require('./auth');
+const { isMailConfigured, sendMail } = require('./mailer');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
@@ -14,36 +16,84 @@ function createApi({ auth, courses, attendance, reports }) {
   const r = express.Router();
   r.use(express.json({ limit: '1mb' }));
 
-  // --- Autenticación ---
+  // Protección básica contra peticiones de otros sitios (CSRF): el Origin debe ser este mismo servidor.
+  r.use((req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || !req.headers.origin) return next();
+    let host = '';
+    try { host = new URL(req.headers.origin).host; } catch { /* origen inválido */ }
+    const allowed = [req.headers.host, req.headers['x-forwarded-host']].filter(Boolean);
+    if (process.env.APP_URL) { try { allowed.push(new URL(process.env.APP_URL).host); } catch { /* APP_URL inválida */ } }
+    if (!allowed.includes(host)) return res.status(403).json({ error: 'Origen no permitido.' });
+    next();
+  });
+
+  const resetAvailable = () => isMailConfigured() && Boolean(process.env.APP_URL);
+
+  // --- Autenticación y sesiones ---
+  r.get('/auth/me', (req, res) => res.json({
+    teacher: req.teacher || null,
+    config: {
+      allow_registration: process.env.ALLOW_REGISTRATION !== 'false',
+      registration_code_required: auth.registrationRequiresCode(),
+      password_reset_available: resetAvailable(),
+      report_auto_send: process.env.REPORT_AUTO_SEND !== 'false',
+      report_day: Number(process.env.REPORT_DAY ?? 5),
+      report_time: process.env.REPORT_TIME || '16:00',
+      mail_configured: isMailConfigured(),
+      timezone: process.env.APP_TIMEZONE || 'America/Bogota'
+    }
+  }));
   r.post('/auth/register', h((req, res) => {
-    if (process.env.ALLOW_REGISTRATION === 'false') throw new HttpError(403, 'El registro de nuevas cuentas está desactivado.');
-    const teacher = auth.register(req.body || {});
-    auth.startSession(res, teacher.id);
-    res.status(201).json({ teacher });
+    const body = req.body || {};
+    const teacher = auth.register(body);
+    auth.startSession(req, res, teacher.id, { remember: Boolean(body.remember) });
+    res.status(201).json({ teacher, first_time: true });
   }));
   r.post('/auth/login', h((req, res) => {
-    const teacher = auth.login(req.body || {});
-    auth.startSession(res, teacher.id);
+    const body = req.body || {};
+    const teacher = auth.login(body, clientIp(req));
+    auth.startSession(req, res, teacher.id, { remember: Boolean(body.remember) });
     res.json({ teacher });
   }));
   r.post('/auth/logout', h((req, res) => {
     auth.endSession(req, res);
     res.json({ ok: true });
   }));
-  r.get('/auth/me', (req, res) => res.json({
-    teacher: req.teacher || null,
-    config: {
-      allow_registration: process.env.ALLOW_REGISTRATION !== 'false',
-      report_auto_send: process.env.REPORT_AUTO_SEND !== 'false',
-      report_day: Number(process.env.REPORT_DAY ?? 5),
-      report_time: process.env.REPORT_TIME || '16:00',
-      mail_configured: Boolean(process.env.SMTP_HOST),
-      timezone: process.env.APP_TIMEZONE || 'America/Bogota'
+
+  // Siempre responde lo mismo, exista o no el correo, para no revelar quién tiene cuenta.
+  r.post('/auth/forgot', h(async (req, res) => {
+    if (!resetAvailable()) throw new HttpError(503, 'La recuperación por correo no está configurada. Pide ayuda al administrador.');
+    const result = auth.createResetToken((req.body || {}).email, clientIp(req));
+    if (result) {
+      const link = `${process.env.APP_URL.replace(/\/$/, '')}/#/restablecer?token=${encodeURIComponent(result.token)}`;
+      sendMail({
+        to: result.teacher.email,
+        subject: 'Restablece tu contraseña de Asistencia QR',
+        text: `Hola, ${result.teacher.name}:\n\nRecibimos una solicitud para restablecer tu contraseña. Abre este enlace (vence en 1 hora):\n\n${link}\n\nSi no fuiste tú, ignora este correo; tu contraseña no cambiará.`
+      }).catch((err) => console.error('[recuperación] no se pudo enviar el correo:', err.message));
     }
+    res.json({ ok: true });
+  }));
+  r.get('/auth/reset/check', h((req, res) => { auth.checkResetToken(req.query.token); res.json({ ok: true }); }));
+  r.post('/auth/reset', h((req, res) => {
+    const teacher = auth.resetPassword(req.body || {});
+    auth.startSession(req, res, teacher.id);
+    res.json({ teacher });
   }));
 
   r.use(auth.requireTeacher);
   const tid = (req) => req.teacher.id;
+
+  // --- Mi cuenta ---
+  r.get('/account', h((req, res) => res.json(auth.getAccount(tid(req), req.sessionId))));
+  r.put('/account', h((req, res) => res.json({ teacher: auth.updateProfile(tid(req), req.body || {}) })));
+  r.put('/account/password', h((req, res) => res.json(auth.changePassword(tid(req), req.sessionId, req.body || {}))));
+  r.post('/account/sessions/close-others', h((req, res) => res.json({ closed: auth.revokeOtherSessions(tid(req), req.sessionId) })));
+  r.delete('/account/sessions/:sessionId', h((req, res) => {
+    if (req.params.sessionId === req.sessionId) throw new HttpError(400, 'Para cerrar esta sesión usa "Cerrar sesión".');
+    auth.revokeSession(tid(req), req.params.sessionId);
+    res.json({ ok: true });
+  }));
 
   // --- Cursos ---
   r.get('/courses', h((req, res) => res.json({ courses: courses.listCourses(tid(req)) })));

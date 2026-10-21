@@ -36,6 +36,9 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
     qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2"/>',
+    phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+    monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.9-4M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4"/>'
   };
   const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICON[name] || ''}</svg>`;
@@ -84,12 +87,39 @@
     }
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 && !path.startsWith('/auth/')) {
-      state.teacher = null;
-      go('#/login');
+      sessionExpired(data.error);
       throw new Error(data.error || 'Inicia sesión para continuar.');
     }
     if (!res.ok) throw new Error(data.error || 'Algo salió mal. Inténtalo de nuevo.');
     return data;
+  }
+
+  // La sesión terminó (venció o se cerró desde otro dispositivo): vuelve al ingreso
+  // y, al entrar de nuevo, regresa a la página donde estaba.
+  function sessionExpired(message) {
+    if (!state.teacher) return;
+    state.teacher = null;
+    state.courses = null;
+    const here = location.hash || '#/';
+    if (!/^#\/(login|registro|olvide|restablecer)/.test(here)) {
+      try { sessionStorage.setItem('aqr:return', here); } catch { /* sin almacenamiento */ }
+    }
+    toast(message || 'Tu sesión terminó. Vuelve a ingresar.', 'error');
+    go('#/login');
+  }
+
+  function afterSignIn(teacher, { firstTime = false } = {}) {
+    state.teacher = teacher;
+    state.checkedAt = Date.now();
+    state.courses = null;
+    state.draft = null;
+    let target = firstTime ? '#/?bienvenida=1' : '#/';
+    try {
+      const saved = sessionStorage.getItem('aqr:return');
+      sessionStorage.removeItem('aqr:return');
+      if (saved && !firstTime) target = saved;
+    } catch { /* sin almacenamiento */ }
+    go(target);
   }
 
   async function loadCourses(force = false) {
@@ -165,14 +195,21 @@
     const link = (n, text) => `<a href="${n.href}" ${n.key === active ? 'aria-current="page"' : ''}>${icon(n.icon)}${esc(text)}</a>`;
     $('#side-nav').innerHTML = NAV.map((n) => link(n, n.side)).join('');
     $('#bottom-nav').innerHTML = NAV.filter((n) => !n.sideOnly).map((n) => link(n, n.label)).join('');
-    $('#side-user').textContent = state.teacher.name;
+    const userLink = $('#side-user');
+    userLink.textContent = state.teacher.name;
+    userLink.setAttribute('aria-current', active === 'account' ? 'page' : 'false');
   }
 
   let cleanup = null; // función para detener la cámara u otros recursos al salir de una vista
   function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
+  // [patrón, vista, menú activo, acceso]: acceso 'guest' = solo sin sesión, 'any' = con o sin sesión.
   const routes = [
-    [/^#\/login$/, viewLogin, null, true],
+    [/^#\/login$/, viewLogin, null, 'guest'],
+    [/^#\/registro$/, viewRegister, null, 'guest'],
+    [/^#\/olvide$/, viewForgot, null, 'guest'],
+    [/^#\/restablecer$/, viewReset, null, 'any'],
+    [/^#\/cuenta$/, viewAccount, 'account'],
     [/^#\/?$/, viewHome, 'home'],
     [/^#\/scan(?:\/(\d+))?$/, viewScan, 'scan'],
     [/^#\/list(?:\/(\d+))?$/, viewList, 'list'],
@@ -187,17 +224,28 @@
     if (cleanup) { try { await cleanup(); } catch { /* nada */ } cleanup = null; }
     const [path, qs] = (location.hash || '#/').split('?');
     const params = new URLSearchParams(qs || '');
-    for (const [re, view, navKey, isPublic] of routes) {
+    for (const [re, view, navKey, access] of routes) {
       const m = re.exec(path);
       if (!m) continue;
-      if (!isPublic && !state.teacher) return go('#/login');
-      if (isPublic && state.teacher) return go('#/');
-      renderNav(navKey);
+      if (!access && !state.teacher) {
+        try { sessionStorage.setItem('aqr:return', location.hash); } catch { /* nada */ }
+        return go('#/login');
+      }
+      if (access === 'guest' && state.teacher) return go('#/');
+      // Revisa cada cierto tiempo que la sesión siga abierta (pudo cerrarse desde otro dispositivo).
+      if (!access && Date.now() - (state.checkedAt || 0) > 60000) {
+        state.checkedAt = Date.now();
+        try {
+          const me = await api('/auth/me');
+          if (!me.teacher) return sessionExpired('Tu sesión se cerró. Vuelve a ingresar.');
+          state.teacher = me.teacher;
+        } catch { /* sin conexión: sigue con lo que hay */ }
+      }
+      renderNav(access ? null : navKey);
       try {
         await view(m.slice(1), params);
       } catch (err) {
-        console.error(err);
-        if (state.teacher) errorPage(err);
+        if (state.teacher) { console.error(err); errorPage(err); } // sin sesión: ya se mostró el ingreso
       }
       main.focus({ preventScroll: true });
       return;
@@ -243,56 +291,294 @@
     if (sel) sel.addEventListener('change', () => go(`#/${target}/${sel.value}${keepQs}`));
   }
 
-  // ---------------------------------------------------------------- Login / registro
-  async function viewLogin() {
-    renderNav(null);
-    let mode = 'login';
-    const draw = () => {
-      setPage(`<div class="auth-wrap"><div class="auth-card">
-        <span class="brand"><span class="brand-mark">${icon('qr')}</span>Asistencia QR</span>
-        <div class="card stack" style="gap:16px;padding:22px">
-          <div><h1 style="font-size:24px">${mode === 'login' ? 'Inicia sesión' : 'Crea tu cuenta'}</h1>
-          <p class="muted" style="margin:4px 0 0">${mode === 'login' ? 'Toma asistencia escaneando el QR de tus estudiantes.' : 'Solo necesitas tu nombre, correo y una contraseña.'}</p></div>
-          <form id="auth-form" class="stack" novalidate>
-            ${mode === 'register' ? '<label class="field">Nombre<input class="input" name="name" autocomplete="name" required></label>' : ''}
-            <label class="field">Correo<input class="input" type="email" name="email" autocomplete="email" required></label>
-            <label class="field"><span>Contraseña${mode === 'register' ? ' <span class="hint">(mínimo 8 caracteres)</span></span>' : ''}
-              <input class="input" type="password" name="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
-            <div class="form-error" hidden></div>
-            <button class="btn btn-primary btn-lg" type="submit">${mode === 'login' ? 'Entrar' : 'Crear cuenta'}</button>
-          </form>
-          ${state.config.allow_registration !== false ? `<p class="small muted" style="margin:0;text-align:center">${mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}
-            <button class="link-btn" id="toggle-mode" type="button">${mode === 'login' ? 'Regístrate' : 'Inicia sesión'}</button></p>` : ''}
-        </div></div></div>`);
-      const t = $('#toggle-mode');
-      if (t) t.onclick = () => { mode = mode === 'login' ? 'register' : 'login'; draw(); };
-      $('#auth-form').onsubmit = async (e) => {
-        e.preventDefault();
-        const f = e.target;
-        const btn = $('button[type=submit]', f);
-        const errBox = $('.form-error', f);
-        btn.disabled = true;
-        errBox.hidden = true;
-        try {
-          const data = await api(`/auth/${mode}`, { method: 'POST', body: Object.fromEntries(new FormData(f)) });
-          state.teacher = data.teacher;
-          state.courses = null;
-          go('#/');
-        } catch (err) {
-          errBox.textContent = err.message;
-          errBox.hidden = false;
-          btn.disabled = false;
-        }
+  // ---------------------------------------------------------------- Ingreso, registro y contraseña
+  function authLayout(title, subtitle, inner, footer = '') {
+    setPage(`<div class="auth-wrap"><div class="auth-card">
+      <span class="brand"><span class="brand-mark">${icon('qr')}</span>Asistencia QR</span>
+      <div class="card stack" style="gap:16px;padding:22px">
+        <div><h1 style="font-size:24px">${esc(title)}</h1>
+        ${subtitle ? `<p class="muted" style="margin:4px 0 0">${subtitle}</p>` : ''}</div>
+        ${inner}
+      </div>
+      ${footer ? `<div class="card auth-alt">${footer}</div>` : ''}
+    </div></div>`);
+  }
+
+  // Envía un formulario de autenticación mostrando errores en la misma tarjeta.
+  function bindAuthForm(handler) {
+    const f = $('#auth-form');
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = $('button[type=submit]', f);
+      const errBox = $('.form-error', f);
+      errBox.hidden = true;
+      btn.disabled = true;
+      try {
+        await handler(Object.fromEntries(new FormData(f)), f);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.hidden = false;
+        btn.disabled = false;
+      }
+    };
+    const first = $('input:not([type=hidden]):not([type=checkbox])', f);
+    if (first && !first.value) first.focus();
+  }
+
+  const passwordField = (name, label, autocomplete, hint = '') => `
+    <label class="field"><span>${label}${hint ? ` <span class="hint">${hint}</span>` : ''}</span>
+      <span class="pw-wrap">
+        <input class="input" type="password" name="${name}" autocomplete="${autocomplete}" required minlength="8">
+        <button class="pw-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false">Ver</button>
+      </span></label>`;
+
+  function bindPasswordToggles() {
+    $$('.pw-toggle').forEach((b) => {
+      b.onclick = () => {
+        const input = b.previousElementSibling;
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        b.textContent = show ? 'Ocultar' : 'Ver';
+        b.setAttribute('aria-pressed', String(show));
+        b.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
       };
-      $('input', main).focus();
+    });
+  }
+
+  const rememberBox = `<label class="check"><input type="checkbox" name="remember" value="1">
+    <span>Recordarme en este dispositivo <span class="hint">(no lo marques en computadores compartidos)</span></span></label>`;
+
+  async function viewLogin() {
+    const cfg = state.config;
+    authLayout('Inicia sesión', 'Entra con tu correo para tomar asistencia.', `
+      <form id="auth-form" class="stack" novalidate>
+        <label class="field">Correo<input class="input" type="email" name="email" autocomplete="username" required></label>
+        ${passwordField('password', 'Contraseña', 'current-password')}
+        ${rememberBox}
+        <div class="form-error" hidden></div>
+        <button class="btn btn-primary btn-lg" type="submit">Entrar</button>
+      </form>
+      ${cfg.password_reset_available ? '<a class="small" href="#/olvide" style="text-align:center">¿Olvidaste tu contraseña?</a>'
+        : '<p class="small muted" style="margin:0;text-align:center">¿Olvidaste tu contraseña? Pide ayuda al administrador de la plataforma.</p>'}`,
+      cfg.allow_registration !== false ? `<div class="spread"><span><strong>¿Es tu primera vez?</strong><br><span class="small muted">Crea tu cuenta de docente en un minuto.</span></span>
+        <a class="btn" href="#/registro">Crear cuenta</a></div>` : '');
+    bindPasswordToggles();
+    bindAuthForm(async (body) => {
+      const data = await api('/auth/login', { method: 'POST', body: { ...body, remember: body.remember === '1' } });
+      afterSignIn(data.teacher);
+    });
+  }
+
+  async function viewRegister() {
+    const cfg = state.config;
+    if (cfg.allow_registration === false) {
+      authLayout('Registro cerrado', 'El registro de nuevas cuentas está desactivado. Pide a coordinación que te cree una cuenta.',
+        '<a class="btn btn-lg" href="#/login">Volver a iniciar sesión</a>');
+      return;
+    }
+    authLayout('Crea tu cuenta', 'Es tu primera vez: regístrate como docente. Después entrarás siempre con tu correo y contraseña.', `
+      <form id="auth-form" class="stack" novalidate>
+        <label class="field">Nombre completo<input class="input" name="name" autocomplete="name" required maxlength="80" placeholder="Ej: Laura Rendón"></label>
+        <label class="field">Correo<input class="input" type="email" name="email" autocomplete="email" required placeholder="tu-correo@colegio.edu.co"></label>
+        ${passwordField('password', 'Contraseña', 'new-password', '(mínimo 8 caracteres)')}
+        ${passwordField('password_confirm', 'Repite la contraseña', 'new-password')}
+        ${cfg.registration_code_required ? `<label class="field"><span>Código del colegio <span class="hint">(te lo da coordinación)</span></span>
+          <input class="input" name="code" autocomplete="off" required></label>` : ''}
+        ${rememberBox}
+        <div class="form-error" hidden></div>
+        <button class="btn btn-primary btn-lg" type="submit">Crear cuenta</button>
+      </form>`,
+      `<div class="spread"><span class="small muted">¿Ya tienes cuenta?</span><a class="btn" href="#/login">Iniciar sesión</a></div>`);
+    bindPasswordToggles();
+    bindAuthForm(async (body) => {
+      if ((body.password || '').length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
+      if (body.password !== body.password_confirm) throw new Error('Las contraseñas no coinciden.');
+      const data = await api('/auth/register', { method: 'POST', body: { ...body, remember: body.remember === '1' } });
+      afterSignIn(data.teacher, { firstTime: true });
+    });
+  }
+
+  async function viewForgot() {
+    if (!state.config.password_reset_available) {
+      authLayout('Recuperar contraseña', 'La recuperación por correo no está activada en esta plataforma. Pide ayuda al administrador.',
+        '<a class="btn btn-lg" href="#/login">Volver a iniciar sesión</a>');
+      return;
+    }
+    authLayout('Recuperar contraseña', 'Escribe el correo de tu cuenta y te enviaremos un enlace para crear una contraseña nueva.', `
+      <form id="auth-form" class="stack" novalidate>
+        <label class="field">Correo<input class="input" type="email" name="email" autocomplete="email" required></label>
+        <div class="form-error" hidden></div>
+        <button class="btn btn-primary btn-lg" type="submit">Enviar enlace</button>
+      </form>
+      <a class="small" href="#/login" style="text-align:center">Volver a iniciar sesión</a>`);
+    bindAuthForm(async (body) => {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email || '')) throw new Error('Escribe un correo válido.');
+      await api('/auth/forgot', { method: 'POST', body });
+      authLayout('Revisa tu correo', `Si <strong>${esc(body.email)}</strong> tiene una cuenta, te enviamos un enlace para restablecer la contraseña. Vence en 1 hora.`,
+        `<p class="small muted" style="margin:0">¿No llega? Revisa la carpeta de spam o vuelve a intentarlo en unos minutos.</p>
+         <a class="btn btn-lg" href="#/login">Volver a iniciar sesión</a>`);
+    });
+  }
+
+  async function viewReset(_, params) {
+    const token = params.get('token') || '';
+    loading();
+    try {
+      await api(`/auth/reset/check?token=${encodeURIComponent(token)}`);
+    } catch (err) {
+      authLayout('Enlace no válido', esc(err.message),
+        `${state.config.password_reset_available ? '<a class="btn btn-primary btn-lg" href="#/olvide">Pedir un enlace nuevo</a>' : ''}
+         <a class="btn btn-lg" href="#/login">Volver a iniciar sesión</a>`);
+      return;
+    }
+    authLayout('Crea una contraseña nueva', 'Al guardarla se cerrarán las sesiones abiertas en otros dispositivos.', `
+      <form id="auth-form" class="stack" novalidate>
+        ${passwordField('new_password', 'Contraseña nueva', 'new-password', '(mínimo 8 caracteres)')}
+        ${passwordField('password_confirm', 'Repite la contraseña', 'new-password')}
+        <div class="form-error" hidden></div>
+        <button class="btn btn-primary btn-lg" type="submit">Guardar y entrar</button>
+      </form>`);
+    bindPasswordToggles();
+    bindAuthForm(async (body) => {
+      if ((body.new_password || '').length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
+      if (body.new_password !== body.password_confirm) throw new Error('Las contraseñas no coinciden.');
+      const data = await api('/auth/reset', { method: 'POST', body: { ...body, token } });
+      toast('Contraseña actualizada');
+      afterSignIn(data.teacher);
+    });
+  }
+
+  // ---------------------------------------------------------------- Mi cuenta
+  function relTime(ms) {
+    const diff = Date.now() - ms;
+    if (diff < 2 * 60 * 1000) return 'activa ahora';
+    const min = Math.round(diff / 60000);
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `hace ${h} h`;
+    const d = Math.round(h / 24);
+    return `hace ${d} día${d === 1 ? '' : 's'}`;
+  }
+
+  async function viewAccount() {
+    loading();
+    let acc = await api('/account');
+    const draw = () => {
+      const t = acc.teacher;
+      const others = acc.sessions.filter((x) => !x.current).length;
+      setPageKeepScroll(`<div class="page narrow">
+        <div class="page-head"><div class="row" style="gap:14px;flex-wrap:nowrap">
+          <span class="avatar avatar-lg" aria-hidden="true">${esc(initials(t.name))}</span>
+          <div class="titles"><span class="eyebrow">Mi cuenta</span><h1>${esc(t.name)}</h1><span class="muted">${esc(t.email)}</span></div>
+        </div></div>
+
+        <form id="profile-form" class="card stack" novalidate>
+          <h2>Datos personales</h2>
+          <div class="grid-auto">
+            <label class="field">Nombre<input class="input" name="name" value="${esc(t.name)}" required maxlength="80" autocomplete="name"></label>
+            <label class="field"><span>Correo <span class="hint">(con él inicias sesión)</span></span><input class="input" value="${esc(t.email)}" disabled></label>
+          </div>
+          <div class="form-error" hidden></div>
+          <div><button class="btn btn-primary" type="submit">Guardar nombre</button></div>
+        </form>
+
+        <form id="password-form" class="card stack" novalidate>
+          <h2>Cambiar contraseña</h2>
+          <input type="text" name="username" value="${esc(t.email)}" autocomplete="username" hidden>
+          ${passwordField('current_password', 'Contraseña actual', 'current-password')}
+          <div class="grid-auto">
+            ${passwordField('new_password', 'Contraseña nueva', 'new-password', '(mínimo 8 caracteres)')}
+            ${passwordField('password_confirm', 'Repite la nueva', 'new-password')}
+          </div>
+          <p class="small muted" style="margin:0">Al cambiarla se cierran tus sesiones en otros dispositivos.</p>
+          <div class="form-error" hidden></div>
+          <div><button class="btn btn-primary" type="submit">Cambiar contraseña</button></div>
+        </form>
+
+        <div class="card card-flush">
+          <div class="card-head spread"><div class="stack" style="gap:2px"><h2>Sesiones abiertas</h2>
+            <span class="small muted">Dispositivos donde has iniciado sesión.</span></div>
+            ${others ? '<button class="btn btn-danger" type="button" id="close-others">Cerrar las demás</button>' : ''}</div>
+          <ul class="session-list">${acc.sessions.map((x) => `
+            <li class="session-row">
+              <span class="session-icon" aria-hidden="true">${icon(/Android|iPhone|iPad/.test(x.device) ? 'phone' : 'monitor')}</span>
+              <span class="info"><strong>${esc(x.device)}${x.current ? ' <span class="chip chip-presente">Este dispositivo</span>' : ''}</strong>
+                <span>${x.current ? 'Activa ahora' : cap(relTime(x.last_seen))} · ${x.persistent ? 'Recordada 30 días' : 'Hasta cerrar el navegador'}${x.ip ? ' · ' + esc(x.ip) : ''}</span></span>
+              ${x.current ? '' : `<button class="btn" type="button" data-close="${esc(x.id)}">Cerrar</button>`}
+            </li>`).join('')}</ul>
+        </div>
+
+        <div class="card spread">
+          <span class="stack" style="gap:2px"><strong>Cerrar sesión</strong><span class="small muted">Sal de la plataforma en este dispositivo.</span></span>
+          <button class="btn" type="button" id="logout-here">Cerrar sesión</button>
+        </div>
+      </div>`);
+      bindPasswordToggles();
+
+      const pf = $('#profile-form');
+      pf.onsubmit = async (e) => {
+        e.preventDefault();
+        const err = $('.form-error', pf);
+        err.hidden = true;
+        try {
+          const { teacher } = await api('/account', { method: 'PUT', body: Object.fromEntries(new FormData(pf)) });
+          state.teacher = teacher;
+          acc.teacher = { ...acc.teacher, ...teacher };
+          renderNav('account');
+          toast('Nombre actualizado');
+          draw();
+        } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+      };
+
+      const pw = $('#password-form');
+      pw.onsubmit = async (e) => {
+        e.preventDefault();
+        const err = $('.form-error', pw);
+        const body = Object.fromEntries(new FormData(pw));
+        err.hidden = true;
+        try {
+          if ((body.new_password || '').length < 8) throw new Error('La contraseña nueva debe tener al menos 8 caracteres.');
+          if (body.new_password !== body.password_confirm) throw new Error('Las contraseñas nuevas no coinciden.');
+          const r = await api('/account/password', { method: 'PUT', body });
+          toast(!r.closed_sessions ? 'Contraseña cambiada'
+            : r.closed_sessions === 1 ? 'Contraseña cambiada. Se cerró la sesión en otro dispositivo.'
+              : `Contraseña cambiada. Se cerraron ${r.closed_sessions} sesiones en otros dispositivos.`);
+          acc = await api('/account');
+          draw();
+        } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+      };
+
+      $$('[data-close]').forEach((b) => {
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await api(`/account/sessions/${encodeURIComponent(b.dataset.close)}`, { method: 'DELETE' });
+            acc.sessions = acc.sessions.filter((x) => x.id !== b.dataset.close);
+            toast('Sesión cerrada');
+            draw();
+          } catch (ex) { toast(ex.message, 'error'); b.disabled = false; }
+        };
+      });
+      const co = $('#close-others');
+      if (co) co.onclick = async () => {
+        if (!(await confirmDialog('¿Cerrar las demás sesiones?', 'Tendrás que volver a ingresar en esos dispositivos.', 'Cerrar sesiones', true))) return;
+        try {
+          const r = await api('/account/sessions/close-others', { method: 'POST' });
+          acc.sessions = acc.sessions.filter((x) => x.current);
+          toast(`Se ${r.closed === 1 ? 'cerró 1 sesión' : `cerraron ${r.closed} sesiones`}`);
+          draw();
+        } catch (ex) { toast(ex.message, 'error'); }
+      };
+      $('#logout-here').onclick = logout;
     };
     draw();
   }
 
   // ---------------------------------------------------------------- Inicio
-  async function viewHome() {
+  async function viewHome(_, params) {
     loading();
     const courses = await loadCourses(true);
+    const welcome = params.get('bienvenida') === '1' && !courses.length;
     const first = state.teacher.name.split(' ')[0];
     const dateLabel = cap(longDate(todayStr()));
 
@@ -321,9 +607,19 @@
     }).join('');
 
     setPage(`<div class="page">
-      <div class="page-head">
-        <div class="titles"><span class="eyebrow">${esc(dateLabel)}</span><h1>Hola, ${esc(first)}</h1></div>
+      <div class="page-head with-avatar">
+        <div class="titles"><span class="eyebrow">${esc(dateLabel)}</span><h1>${welcome ? 'Te damos la bienvenida' : 'Hola'}, ${esc(first)}</h1></div>
+        <a class="avatar avatar-link" href="#/cuenta" aria-label="Mi cuenta" title="Mi cuenta">${esc(initials(state.teacher.name))}</a>
       </div>
+      ${welcome ? `<div class="card welcome stack">
+        <h2>Tu cuenta está lista</h2>
+        <p class="muted" style="margin:0">Así empiezas a tomar asistencia con QR:</p>
+        <ol class="welcome-steps">
+          <li><strong>Crea un curso</strong> subiendo la lista en Excel, una foto o escribiendo los nombres.</li>
+          <li><strong>Imprime los carnés</strong> con el código QR de cada estudiante.</li>
+          <li><strong>Escanea</strong> los carnés al iniciar la clase. Cada viernes recibes el Excel de la semana.</li>
+        </ol>
+      </div>` : ''}
       ${courses.length ? `
         <a class="hero-action" href="#/scan">
           <span class="hero-icon">${icon('scan')}</span>
@@ -1122,13 +1418,24 @@
   }
 
   // ---------------------------------------------------------------- arranque
-  $('#logout-btn').onclick = async () => {
+  async function logout() {
     try { await api('/auth/logout', { method: 'POST' }); } catch { /* nada */ }
     state.teacher = null;
     state.courses = null;
     state.draft = null;
+    try { sessionStorage.removeItem('aqr:return'); } catch { /* nada */ }
     go('#/login');
-  };
+  }
+  $('#logout-btn').onclick = logout;
+
+  // Si la sesión se cerró desde otro dispositivo, lo detecta al volver a la pestaña.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !state.teacher) return;
+    try {
+      const me = await api('/auth/me');
+      if (!me.teacher) sessionExpired('Tu sesión se cerró. Vuelve a ingresar.');
+    } catch { /* sin conexión: se revisa en la próxima acción */ }
+  });
 
   window.addEventListener('hashchange', route);
 
@@ -1137,6 +1444,7 @@
       const me = await api('/auth/me');
       state.teacher = me.teacher;
       state.config = me.config || state.config;
+      state.checkedAt = Date.now();
     } catch (err) {
       toast(err.message, 'error');
     }

@@ -1,6 +1,7 @@
 // Resumen semanal, exportación a Excel y envío automático por correo.
 const { HttpError, isValidDate, mondayOf, weekDays, shortDayLabel, longDateLabel, localParts, addDays } = require('../util');
 const { safeFile } = require('./qr');
+const { isMailConfigured, sendMail } = require('../mailer');
 
 const LETTER = { presente: 'P', tarde: 'T', ausente: 'A' };
 
@@ -89,29 +90,16 @@ function createReportService(db, courses) {
 
   const fileName = (m) => `Asistencia_${safeFile(m.course.name)}_${m.monday}.xlsx`;
 
-  function mailer() {
-    if (!process.env.SMTP_HOST) return null;
-    const nodemailer = require('nodemailer');
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
-    });
-  }
-
   async function sendForCourse(course, monday, recipient) {
     recipient = recipient || course.report_email;
     if (!recipient) throw new HttpError(400, 'Este curso no tiene un correo configurado para el reporte.');
-    const transport = mailer();
-    if (!transport) throw new HttpError(503, 'El envío de correos no está configurado en el servidor (SMTP).');
+    if (!isMailConfigured()) throw new HttpError(503, 'El envío de correos no está configurado en el servidor (SMTP).');
     const matrix = matrixForCourse(course, monday);
     const xlsx = await buildXlsx(matrix);
     const total = matrix.rows.length;
     const lowAttendance = matrix.rows.filter((r) => r.pct !== null && r.pct < 80).map((r) => r.student.full_name);
     try {
-      await transport.sendMail({
-        from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      await sendMail({
         to: recipient,
         subject: `Asistencia semanal ${course.name} · ${longDateLabel(matrix.monday)} al ${longDateLabel(matrix.friday)}`,
         text: [
