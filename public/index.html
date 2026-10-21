@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1F6F54">
+  <title>Asistencia QR</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" hidden>
+      <a class="brand" href="#/">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2"/></svg>
+        </span>
+        <span>Asistencia QR</span>
+      </a>
+      <nav class="side-nav" aria-label="Secciones" id="side-nav"></nav>
+      <div class="side-footer">
+        <span class="side-user" id="side-user"></span>
+        <button class="link-btn" id="logout-btn" type="button">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="main" id="main" tabindex="-1"></main>
+
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Navegación principal" hidden></nav>
+  </div>
+
+  <div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>

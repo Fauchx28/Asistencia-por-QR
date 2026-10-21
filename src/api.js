@@ -1,0 +1,130 @@
+// Rutas de la API REST (/api/...).
+const express = require('express');
+const multer = require('multer');
+const { HttpError } = require('./util');
+const { qrPng, writeCardsPdf, writeQrZip, safeFile } = require('./services/qr');
+const { importStudents } = require('./services/importer');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+
+// Envuelve handlers async para que los errores lleguen al manejador central.
+const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+function createApi({ auth, courses, attendance, reports }) {
+  const r = express.Router();
+  r.use(express.json({ limit: '1mb' }));
+
+  // --- Autenticación ---
+  r.post('/auth/register', h((req, res) => {
+    if (process.env.ALLOW_REGISTRATION === 'false') throw new HttpError(403, 'El registro de nuevas cuentas está desactivado.');
+    const teacher = auth.register(req.body || {});
+    auth.startSession(res, teacher.id);
+    res.status(201).json({ teacher });
+  }));
+  r.post('/auth/login', h((req, res) => {
+    const teacher = auth.login(req.body || {});
+    auth.startSession(res, teacher.id);
+    res.json({ teacher });
+  }));
+  r.post('/auth/logout', h((req, res) => {
+    auth.endSession(req, res);
+    res.json({ ok: true });
+  }));
+  r.get('/auth/me', (req, res) => res.json({
+    teacher: req.teacher || null,
+    config: {
+      allow_registration: process.env.ALLOW_REGISTRATION !== 'false',
+      report_auto_send: process.env.REPORT_AUTO_SEND !== 'false',
+      report_day: Number(process.env.REPORT_DAY ?? 5),
+      report_time: process.env.REPORT_TIME || '16:00',
+      mail_configured: Boolean(process.env.SMTP_HOST),
+      timezone: process.env.APP_TIMEZONE || 'America/Bogota'
+    }
+  }));
+
+  r.use(auth.requireTeacher);
+  const tid = (req) => req.teacher.id;
+
+  // --- Cursos ---
+  r.get('/courses', h((req, res) => res.json({ courses: courses.listCourses(tid(req)) })));
+  r.post('/courses', h((req, res) => res.status(201).json({ course: courses.createCourse(tid(req), req.body || {}) })));
+  r.get('/courses/:id', h((req, res) => res.json({ course: courses.getCourse(tid(req), req.params.id) })));
+  r.put('/courses/:id', h((req, res) => res.json({ course: courses.updateCourse(tid(req), req.params.id, req.body || {}) })));
+  r.delete('/courses/:id', h((req, res) => { courses.deleteCourse(tid(req), req.params.id); res.json({ ok: true }); }));
+
+  // Importar lista (Excel, CSV, foto o texto). Solo devuelve los nombres para revisarlos; no guarda nada.
+  r.post('/import', upload.single('file'), h(async (req, res) => {
+    const f = req.file;
+    const result = await importStudents({
+      buffer: f && f.buffer, filename: f && f.originalname, mimetype: f && f.mimetype, text: req.body && req.body.text
+    });
+    res.json(result);
+  }));
+
+  // --- Estudiantes ---
+  r.get('/courses/:id/students', h((req, res) => res.json({ students: courses.listStudents(tid(req), req.params.id) })));
+  r.post('/courses/:id/students', h((req, res) => res.status(201).json({ student: courses.addStudent(tid(req), req.params.id, req.body || {}) })));
+  r.put('/students/:sid', h((req, res) => res.json({ student: courses.updateStudent(tid(req), req.params.sid, req.body || {}) })));
+  r.delete('/students/:sid', h((req, res) => { courses.removeStudent(tid(req), req.params.sid); res.json({ ok: true }); }));
+  r.post('/students/:sid/regenerate-qr', h((req, res) => res.json({ student: courses.regenerateQr(tid(req), req.params.sid) })));
+
+  // --- Códigos QR ---
+  r.get('/students/:sid/qr.png', h(async (req, res) => {
+    const s = courses.getStudent(tid(req), req.params.sid);
+    res.type('png').set('Cache-Control', 'private, no-store').send(await qrPng(s.qr_token, Number(req.query.size) || 600));
+  }));
+  r.get('/courses/:id/qr.pdf', h(async (req, res) => {
+    const c = courses.getCourse(tid(req), req.params.id);
+    const students = courses.listStudents(tid(req), c.id);
+    res.type('pdf').set('Content-Disposition', `attachment; filename="Carnes_QR_${safeFile(c.name)}.pdf"`);
+    await writeCardsPdf(res, c, students);
+  }));
+  r.get('/courses/:id/qr.zip', h(async (req, res) => {
+    const c = courses.getCourse(tid(req), req.params.id);
+    const students = courses.listStudents(tid(req), c.id);
+    res.type('zip').set('Content-Disposition', `attachment; filename="QR_${safeFile(c.name)}.zip"`);
+    await writeQrZip(res, c, students);
+  }));
+
+  // --- Asistencia ---
+  r.get('/courses/:id/attendance', h((req, res) => res.json(attendance.dayList(tid(req), req.params.id, req.query.date))));
+  r.post('/courses/:id/attendance/scan', h((req, res) => res.json(attendance.scan(tid(req), req.params.id, (req.body || {}).token))));
+  r.put('/courses/:id/attendance/:sid', h((req, res) => {
+    const { date, status } = req.body || {};
+    res.json(attendance.setStatus(tid(req), req.params.id, req.params.sid, date, status ?? null));
+  }));
+  r.post('/courses/:id/attendance/close', h((req, res) => res.json(attendance.closeDay(tid(req), req.params.id, (req.body || {}).date))));
+
+  // --- Reportes semanales ---
+  r.get('/courses/:id/week', h((req, res) => res.json(reports.weekMatrix(tid(req), req.params.id, req.query.date))));
+  r.get('/courses/:id/week.xlsx', h(async (req, res) => {
+    const m = reports.weekMatrix(tid(req), req.params.id, req.query.date);
+    const buf = await reports.buildXlsx(m);
+    res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .set('Content-Disposition', `attachment; filename="${reports.fileName(m)}"`).send(buf);
+  }));
+  r.post('/courses/:id/week/send', h(async (req, res) => {
+    const { date, recipient } = req.body || {};
+    res.json(await reports.sendWeekly(tid(req), req.params.id, date, recipient));
+  }));
+  r.get('/courses/:id/reports', h((req, res) => res.json({ log: reports.reportLog(tid(req), req.params.id) })));
+
+  r.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));
+
+  // Manejador central de errores.
+  // eslint-disable-next-line no-unused-vars
+  r.use((err, req, res, _next) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo supera los 10 MB.' : 'No se pudo subir el archivo.' });
+    }
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Solicitud con formato inválido.' });
+    const status = err.status || 500;
+    if (status >= 500) console.error(err);
+    if (res.headersSent) return res.end();
+    res.status(status).json({ error: status >= 500 && !(err instanceof HttpError) ? 'Ocurrió un error inesperado.' : err.message });
+  });
+
+  return r;
+}
+
+module.exports = { createApi };
