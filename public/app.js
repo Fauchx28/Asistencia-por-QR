@@ -301,6 +301,7 @@
         ${inner}
       </div>
       ${footer ? `<div class="card auth-alt">${footer}</div>` : ''}
+      <p class="small muted" style="margin:0;text-align:center"><a href="/privacidad.html" target="_blank" rel="noopener">Política de tratamiento de datos</a></p>
     </div></div>`);
   }
 
@@ -384,6 +385,9 @@
         ${passwordField('password_confirm', 'Repite la contraseña', 'new-password')}
         ${cfg.registration_code_required ? `<label class="field"><span>Código del colegio <span class="hint">(te lo da coordinación)</span></span>
           <input class="input" name="code" autocomplete="off" required></label>` : ''}
+        <label class="check"><input type="checkbox" name="accept_terms" value="1" required>
+          <span>Acepto la <a href="/privacidad.html" target="_blank" rel="noopener">política de tratamiento de datos</a>
+          <span class="hint">y confirmo que el colegio cuenta con la autorización de los acudientes para registrar a los estudiantes.</span></span></label>
         ${rememberBox}
         <div class="form-error" hidden></div>
         <button class="btn btn-primary btn-lg" type="submit">Crear cuenta</button>
@@ -393,7 +397,8 @@
     bindAuthForm(async (body) => {
       if ((body.password || '').length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
       if (body.password !== body.password_confirm) throw new Error('Las contraseñas no coinciden.');
-      const data = await api('/auth/register', { method: 'POST', body: { ...body, remember: body.remember === '1' } });
+      if (body.accept_terms !== '1') throw new Error('Debes aceptar la política de tratamiento de datos para crear la cuenta.');
+      const data = await api('/auth/register', { method: 'POST', body: { ...body, accept_terms: true, remember: body.remember === '1' } });
       afterSignIn(data.teacher, { firstTime: true });
     });
   }
@@ -460,6 +465,28 @@
     return `hace ${d} día${d === 1 ? '' : 's'}`;
   }
 
+  async function loadBackups() {
+    const list = $('#backup-list');
+    if (!list) return;
+    const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    try {
+      const { backups } = await api('/admin/backups');
+      list.innerHTML = backups.length ? backups.map((b) => `<li class="session-row">
+        <span class="info"><strong>${esc(new Date(b.created_at).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }))}</strong>
+        <span>${esc(b.name)} · ${kb(b.size)}</span></span>
+        <a class="btn" href="/api/admin/backups/${encodeURIComponent(b.name)}" download>${icon('download')}Descargar</a></li>`).join('')
+        : '<li class="session-row"><span class="small muted">Aún no hay copias.</span></li>';
+    } catch (err) {
+      list.innerHTML = `<li class="session-row"><span class="small" style="color:var(--absent-ink)">${esc(err.message)}</span></li>`;
+    }
+    const btn = $('#backup-now');
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { await api('/admin/backups', { method: 'POST' }); toast('Copia creada'); await loadBackups(); } catch (err) { toast(err.message, 'error'); }
+      btn.disabled = false;
+    };
+  }
+
   async function viewAccount() {
     loading();
     let acc = await api('/account');
@@ -511,6 +538,20 @@
         <div class="card spread">
           <span class="stack" style="gap:2px"><strong>Cerrar sesión</strong><span class="small muted">Sal de la plataforma en este dispositivo.</span></span>
           <button class="btn" type="button" id="logout-here">Cerrar sesión</button>
+        </div>
+
+        ${state.teacher.is_admin ? `<div class="card card-flush" id="backups-card">
+          <div class="card-head spread"><div class="stack" style="gap:2px"><h2>Copias de seguridad</h2>
+            <span class="small muted">Se crean solas cada día. Descarga una cada semana y guárdala fuera del servidor (por ejemplo en Google Drive).</span></div>
+            <button class="btn" type="button" id="backup-now">Crear copia ahora</button></div>
+          <ul class="session-list" id="backup-list"><li class="session-row"><span class="spinner"></span></li></ul>
+        </div>` : ''}
+
+        <div class="card stack" style="border-color:#EBCFC2">
+          <h2>Tus datos</h2>
+          <p class="small muted" style="margin:0">Puedes leer cómo tratamos la información en la <a href="/privacidad.html" target="_blank" rel="noopener">política de tratamiento de datos</a>.
+            Si eliminas tu cuenta se borran tus cursos, estudiantes y todo el historial de asistencia. No se puede deshacer.</p>
+          <div><button class="btn btn-danger" type="button" id="delete-account">${icon('trash')}Eliminar mi cuenta</button></div>
         </div>
       </div>`);
       bindPasswordToggles();
@@ -570,6 +611,24 @@
         } catch (ex) { toast(ex.message, 'error'); }
       };
       $('#logout-here').onclick = logout;
+      if (state.teacher.is_admin) loadBackups();
+      $('#delete-account').onclick = async () => {
+        const fd = await dialog({
+          title: '¿Eliminar tu cuenta?', ok: 'Eliminar definitivamente', danger: true,
+          body: `<p class="muted" style="margin:0">Se borrarán tu cuenta, tus cursos, estudiantes y todo el historial de asistencia. Descarga antes los reportes que necesites.</p>
+            <input type="text" name="username" value="${esc(acc.teacher.email)}" autocomplete="username" hidden>
+            <label class="field">Tu contraseña<input class="input" type="password" name="password" autocomplete="current-password" required></label>
+            <label class="field"><span>Escribe <strong>ELIMINAR</strong> para confirmar</span><input class="input" name="confirm" autocomplete="off" required></label>`
+        });
+        if (!fd) return;
+        try {
+          await api('/account', { method: 'DELETE', body: Object.fromEntries(fd) });
+          state.teacher = null;
+          state.courses = null;
+          toast('Tu cuenta fue eliminada');
+          go('#/login');
+        } catch (ex) { toast(ex.message, 'error'); }
+      };
     };
     draw();
   }
@@ -1058,6 +1117,8 @@
             </label>
           </div>
           <div id="import-status"></div>
+          <p class="small muted" style="margin:0">Antes de registrar a los estudiantes, el colegio debe tener la autorización de sus acudientes.
+            <a href="/autorizacion-acudientes.html" target="_blank" rel="noopener">Imprimir formato de autorización</a></p>
           <div class="row small"><a href="/plantilla-estudiantes.csv" download>Descargar plantilla</a>
             <span class="muted" aria-hidden="true">·</span>
             <button class="link-btn" type="button" id="toggle-paste">${d.showPaste ? 'Ocultar' : 'Prefiero escribir o pegar los nombres'}</button></div>

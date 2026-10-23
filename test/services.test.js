@@ -16,7 +16,7 @@ function setup() {
   const courses = createCourseService(db);
   const attendance = createAttendanceService(db, courses);
   const reports = createReportService(db, courses);
-  const t = auth.register({ name: 'Laura', email: 'laura@colegio.edu', password: 'secreta123' });
+  const t = auth.register({ name: 'Laura', email: 'laura@colegio.edu', password: 'secreta123', accept_terms: true });
   return { db, auth, courses, attendance, reports, t };
 }
 
@@ -86,7 +86,7 @@ test('crear curso con estudiantes y códigos únicos', () => {
 test('otro docente no puede ver el curso', () => {
   const { courses, auth, t } = setup();
   const c = courses.createCourse(t.id, { name: '5° B' });
-  const other = auth.register({ name: 'Pedro', email: 'pedro@colegio.edu', password: 'secreta123' });
+  const other = auth.register({ name: 'Pedro', email: 'pedro@colegio.edu', password: 'secreta123', accept_terms: true });
   assert.throws(() => courses.getCourse(other.id, c.id), (e) => e.status === 404);
 });
 

@@ -96,7 +96,7 @@ function createAuth(db, { now = () => Date.now() } = {}) {
     return Boolean(process.env.REGISTRATION_CODE);
   }
 
-  function register({ name, email, password, password_confirm, code }) {
+  function register({ name, email, password, password_confirm, code, accept_terms }) {
     if (process.env.ALLOW_REGISTRATION === 'false') throw new HttpError(403, 'El registro de nuevas cuentas está desactivado.');
     name = String(name || '').replace(/\s+/g, ' ').trim();
     email = String(email || '').trim().toLowerCase();
@@ -112,11 +112,14 @@ function createAuth(db, { now = () => Date.now() } = {}) {
         throw new HttpError(403, 'El código del colegio no es correcto. Pídeselo a coordinación.');
       }
     }
+    if (accept_terms !== true && accept_terms !== '1' && accept_terms !== 'on') {
+      throw new HttpError(400, 'Debes aceptar la política de tratamiento de datos para crear la cuenta.');
+    }
     if (db.prepare('SELECT 1 FROM teachers WHERE email = ?').get(email)) {
       throw new HttpError(409, 'Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.');
     }
-    const r = db.prepare('INSERT INTO teachers (name, email, password_hash, last_login_at) VALUES (?, ?, ?, ?)')
-      .run(name, email, hashPassword(password), now());
+    const r = db.prepare('INSERT INTO teachers (name, email, password_hash, last_login_at, accepted_terms_at) VALUES (?, ?, ?, ?, ?)')
+      .run(name, email, hashPassword(password), now(), now());
     return { id: Number(r.lastInsertRowid), name, email };
   }
 
@@ -186,7 +189,7 @@ function createAuth(db, { now = () => Date.now() } = {}) {
 
   // ---- Mi cuenta
   function getAccount(teacherId, currentSessionId) {
-    const t = db.prepare('SELECT id, name, email, created_at, last_login_at FROM teachers WHERE id = ?').get(teacherId);
+    const t = db.prepare('SELECT id, name, email, created_at, last_login_at, accepted_terms_at FROM teachers WHERE id = ?').get(teacherId);
     const sessions = db.prepare(`SELECT id, persistent, user_agent, ip, created_at, last_seen FROM auth_sessions
       WHERE teacher_id = ? AND expires_at > ? ORDER BY last_seen DESC`).all(teacherId, now())
       .map((s) => ({
@@ -213,6 +216,14 @@ function createAuth(db, { now = () => Date.now() } = {}) {
     db.prepare('UPDATE teachers SET password_hash = ? WHERE id = ?').run(hashPassword(new_password), teacherId);
     const closed = revokeOtherSessions(teacherId, currentSessionId);
     return { closed_sessions: closed };
+  }
+
+  // Derecho de supresión: borra la cuenta con sus cursos, estudiantes y asistencias.
+  function deleteAccount(teacherId, { password, confirm }) {
+    const t = db.prepare('SELECT password_hash FROM teachers WHERE id = ?').get(teacherId);
+    if (!t || !verifyPassword(String(password || ''), t.password_hash)) throw new HttpError(400, 'La contraseña no es correcta.');
+    if (String(confirm || '').trim().toUpperCase() !== 'ELIMINAR') throw new HttpError(400, 'Escribe ELIMINAR para confirmar.');
+    db.prepare('DELETE FROM teachers WHERE id = ?').run(teacherId);
   }
 
   function revokeSession(teacherId, sessionId) {
@@ -264,7 +275,7 @@ function createAuth(db, { now = () => Date.now() } = {}) {
 
   return {
     register, login, startSession, endSession, loadTeacher, requireTeacher, registrationRequiresCode,
-    getAccount, updateProfile, changePassword, revokeSession, revokeOtherSessions,
+    getAccount, updateProfile, changePassword, revokeSession, revokeOtherSessions, deleteAccount,
     createResetToken, checkResetToken, resetPassword
   };
 }

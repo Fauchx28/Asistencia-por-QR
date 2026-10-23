@@ -1,0 +1,61 @@
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # solo para publicar el resultado en la rama ci-resultados
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Pruebas de la lógica
+        id: unit
+        shell: bash
+        run: npm test 2>&1 | tee resultado-logica.txt
+
+      - name: Prueba completa con librerías reales
+        id: e2e
+        if: always() && steps.unit.outcome != 'cancelled'
+        shell: bash
+        run: npm run test:e2e 2>&1 | tee resultado-completo.txt
+
+      - name: Publicar resultado en la rama ci-resultados
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/resultado"
+          mkdir -p "$out"
+          cp resultado-*.txt "$out/" 2>/dev/null || true
+          cp package-lock.json "$out/" 2>/dev/null || true
+          npm ls --depth=0 > "$out/versiones.txt" 2>&1 || true
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "fecha: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "logica: ${{ steps.unit.outcome }}"
+            echo "completa: ${{ steps.e2e.outcome }}"
+            echo "ejecucion: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$out/ESTADO.txt"
+          cd "$out"
+          git init -q
+          git checkout -q -b ci-resultados
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -qm "Resultado de pruebas para ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-resultados

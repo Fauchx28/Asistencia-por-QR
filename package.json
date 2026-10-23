@@ -1,6 +1,6 @@
 {
   "name": "asistencia-qr",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Gestión de asistencia escolar con lectura de códigos QR",
   "main": "server.js",
   "private": true,
@@ -10,7 +10,11 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/services.test.js test/auth.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test test/services.test.js test/auth.test.js test/backup.test.js",
+    "test:e2e": "node --disable-warning=ExperimentalWarning --test --test-timeout=180000 test/e2e.test.js",
+    "test:all": "npm test && npm run test:e2e",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
+    "restore": "node --disable-warning=ExperimentalWarning scripts/restore.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -21,5 +25,9 @@
     "pdfkit": "^0.17.1",
     "qrcode": "^1.5.4",
     "tesseract.js": "^6.0.1"
+  },
+  "devDependencies": {
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0"
   }
 }

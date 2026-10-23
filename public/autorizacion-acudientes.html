@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autorización de acudientes · Asistencia QR</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    :root { --ink: #18262B; --muted: #56656A; --line: #9AA5A0; --brand: #1F6F54; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #F5F6F2; color: var(--ink); font-family: Manrope, system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+    .bar { max-width: 816px; margin: 0 auto; padding: 16px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+    .bar p { margin: 0; color: var(--muted); max-width: 520px; text-align: left; }
+    .bar button { min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: var(--brand); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+    .sheet { background: #fff; max-width: 816px; margin: 0 auto 32px; padding: 48px 56px; border: 1px solid #E2E6E0; border-radius: 8px; }
+    h1 { font-size: 18px; margin: 0 0 4px; text-align: center; letter-spacing: .01em; }
+    .sub { text-align: center; color: var(--muted); margin: 0 0 22px; }
+    p { margin: 0 0 12px; text-align: justify; }
+    .blank { display: inline-block; min-width: 220px; border-bottom: 1px solid var(--line); height: 1.2em; vertical-align: bottom; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin: 18px 0; }
+    .grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+    .grid label span { border-bottom: 1px solid var(--line); height: 26px; }
+    ul { margin: 0 0 12px; padding-left: 20px; }
+    .choice { display: flex; gap: 36px; margin: 14px 0 22px; font-weight: 700; }
+    .box { display: inline-block; width: 16px; height: 16px; border: 1.5px solid var(--ink); vertical-align: -3px; margin-right: 8px; }
+    .sign { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-top: 36px; }
+    .sign div { border-top: 1px solid var(--ink); padding-top: 6px; font-size: 12px; color: var(--muted); }
+    .foot { margin-top: 26px; font-size: 11px; color: var(--muted); text-align: center; }
+    @media (max-width: 640px) { .sheet { padding: 28px 20px; } .grid, .sign { grid-template-columns: 1fr; } }
+    @media print {
+      @page { size: letter; margin: 14mm; }
+      body { background: #fff; font-size: 11.5pt; }
+      .bar { display: none; }
+      .sheet { border: 0; padding: 0; margin: 0; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <p>Formato para que el colegio lo imprima y lo hagan firmar los padres o acudientes antes de registrar a los estudiantes. Revísalo con el área jurídica del colegio.</p>
+    <button type="button" onclick="window.print()">Imprimir formato</button>
+  </div>
+  <article class="sheet">
+    <h1>AUTORIZACIÓN PARA EL TRATAMIENTO DE DATOS PERSONALES DE ESTUDIANTES</h1>
+    <p class="sub">Control de asistencia escolar con código QR · Ley 1581 de 2012</p>
+
+    <p>Yo, en calidad de padre, madre o acudiente del estudiante identificado abajo, autorizo a la institución educativa
+      <span class="blank"></span> (en adelante, "el colegio"), como responsable del tratamiento, y a
+      <strong data-fill="org">[NOMBRE DEL OPERADOR]</strong>, como encargado que administra la plataforma Asistencia QR, para tratar los siguientes
+      datos del estudiante: <strong>nombre completo, número de documento (opcional) y registros de asistencia</strong> (fecha, hora y estado).</p>
+
+    <div class="grid">
+      <label>Nombre completo del estudiante<span></span></label>
+      <label>Grado y curso<span></span></label>
+      <label>Documento del estudiante (opcional)<span></span></label>
+      <label>Nombre del padre, madre o acudiente<span></span></label>
+      <label>Documento del acudiente<span></span></label>
+      <label>Teléfono o correo de contacto<span></span></label>
+    </div>
+
+    <p><strong>Finalidad.</strong> Los datos se usarán únicamente para registrar la asistencia del estudiante, generar su carné con código QR
+      y elaborar los reportes de asistencia que el colegio requiera. El código QR contiene solo un identificador aleatorio y no muestra datos personales.
+      No se recogen fotografías ni datos sensibles, y los datos no se usarán con fines comerciales.</p>
+
+    <p><strong>Derechos.</strong> Como representante del menor, puedo conocer, actualizar, rectificar y solicitar la supresión de sus datos;
+      pedir prueba de esta autorización; revocarla en cualquier momento; y presentar quejas ante la Superintendencia de Industria y Comercio.
+      Para ejercerlos puedo dirigirme al colegio o a <strong data-fill="contact">[CORREO O CANAL DE CONTACTO]</strong>.</p>
+
+    <p>Declaro que se me informó que, por tratarse de datos de un menor de edad, el tratamiento responde a su interés superior y respeta sus
+      derechos fundamentales, y que la respuesta a preguntas sobre estos datos es facultativa.</p>
+
+    <div class="choice">
+      <span><span class="box"></span>SÍ autorizo</span>
+      <span><span class="box"></span>NO autorizo</span>
+    </div>
+
+    <div class="sign">
+      <div>Firma del padre, madre o acudiente</div>
+      <div>Fecha (día / mes / año)</div>
+    </div>
+    <p class="foot">Consulte la política completa de tratamiento de datos en la plataforma, sección "Privacidad".</p>
+  </article>
+  <script>
+    (async () => {
+      try {
+        const cfg = (await (await fetch('/api/auth/me')).json()).config || {};
+        const values = { org: cfg.org_name, contact: cfg.privacy_contact };
+        document.querySelectorAll('[data-fill]').forEach((el) => { if (values[el.dataset.fill]) el.textContent = values[el.dataset.fill]; });
+      } catch { /* deja los espacios para llenar */ }
+    })();
+  </script>
+</body>
+</html>

@@ -6,13 +6,19 @@ const { qrPng, writeCardsPdf, writeQrZip, safeFile } = require('./services/qr');
 const { importStudents } = require('./services/importer');
 const { clientIp } = require('./auth');
 const { isMailConfigured, sendMail } = require('./mailer');
+const { backupNow, listBackups } = require('./backup');
+
+// Administradores de la plataforma: correos en ADMIN_EMAILS separados por coma.
+const isAdmin = (teacher) => Boolean(teacher) && String(process.env.ADMIN_EMAILS || '')
+  .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean).includes(String(teacher.email).toLowerCase());
+const publicTeacher = (t) => (t ? { id: t.id, name: t.name, email: t.email, is_admin: isAdmin(t) } : null);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
 // Envuelve handlers async para que los errores lleguen al manejador central.
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-function createApi({ auth, courses, attendance, reports }) {
+function createApi({ db, auth, courses, attendance, reports }) {
   const r = express.Router();
   r.use(express.json({ limit: '1mb' }));
 
@@ -31,7 +37,7 @@ function createApi({ auth, courses, attendance, reports }) {
 
   // --- Autenticación y sesiones ---
   r.get('/auth/me', (req, res) => res.json({
-    teacher: req.teacher || null,
+    teacher: publicTeacher(req.teacher),
     config: {
       allow_registration: process.env.ALLOW_REGISTRATION !== 'false',
       registration_code_required: auth.registrationRequiresCode(),
@@ -40,20 +46,22 @@ function createApi({ auth, courses, attendance, reports }) {
       report_day: Number(process.env.REPORT_DAY ?? 5),
       report_time: process.env.REPORT_TIME || '16:00',
       mail_configured: isMailConfigured(),
-      timezone: process.env.APP_TIMEZONE || 'America/Bogota'
+      timezone: process.env.APP_TIMEZONE || 'America/Bogota',
+      org_name: process.env.ORG_NAME || '',
+      privacy_contact: process.env.PRIVACY_CONTACT || ''
     }
   }));
   r.post('/auth/register', h((req, res) => {
     const body = req.body || {};
     const teacher = auth.register(body);
     auth.startSession(req, res, teacher.id, { remember: Boolean(body.remember) });
-    res.status(201).json({ teacher, first_time: true });
+    res.status(201).json({ teacher: publicTeacher(teacher), first_time: true });
   }));
   r.post('/auth/login', h((req, res) => {
     const body = req.body || {};
     const teacher = auth.login(body, clientIp(req));
     auth.startSession(req, res, teacher.id, { remember: Boolean(body.remember) });
-    res.json({ teacher });
+    res.json({ teacher: publicTeacher(teacher) });
   }));
   r.post('/auth/logout', h((req, res) => {
     auth.endSession(req, res);
@@ -78,17 +86,37 @@ function createApi({ auth, courses, attendance, reports }) {
   r.post('/auth/reset', h((req, res) => {
     const teacher = auth.resetPassword(req.body || {});
     auth.startSession(req, res, teacher.id);
-    res.json({ teacher });
+    res.json({ teacher: publicTeacher(teacher) });
   }));
 
   r.use(auth.requireTeacher);
   const tid = (req) => req.teacher.id;
 
+  // --- Administración: copias de seguridad ---
+  const requireAdmin = (req, res, next) => (isAdmin(req.teacher) ? next() : res.status(403).json({ error: 'Solo para administradores.' }));
+  const backupInfo = (b) => ({ name: b.name, size: require('node:fs').statSync(b.file).size, created_at: b.mtime });
+  r.get('/admin/backups', requireAdmin, h((req, res) => res.json({ backups: listBackups().map(backupInfo) })));
+  r.post('/admin/backups', requireAdmin, h((req, res) => {
+    const file = backupNow(db);
+    res.status(201).json({ backup: backupInfo(listBackups().find((b) => b.file === file)) });
+  }));
+  r.get('/admin/backups/:name', requireAdmin, h((req, res) => {
+    const b = listBackups().find((x) => x.name === req.params.name); // solo nombres existentes: evita rutas arbitrarias
+    if (!b) throw new HttpError(404, 'Esa copia no existe.');
+    res.set('Content-Disposition', `attachment; filename="${b.name}"`).type('application/octet-stream');
+    require('node:fs').createReadStream(b.file).pipe(res);
+  }));
+
   // --- Mi cuenta ---
   r.get('/account', h((req, res) => res.json(auth.getAccount(tid(req), req.sessionId))));
-  r.put('/account', h((req, res) => res.json({ teacher: auth.updateProfile(tid(req), req.body || {}) })));
+  r.put('/account', h((req, res) => res.json({ teacher: publicTeacher(auth.updateProfile(tid(req), req.body || {})) })));
   r.put('/account/password', h((req, res) => res.json(auth.changePassword(tid(req), req.sessionId, req.body || {}))));
   r.post('/account/sessions/close-others', h((req, res) => res.json({ closed: auth.revokeOtherSessions(tid(req), req.sessionId) })));
+  r.delete('/account', h((req, res) => {
+    auth.deleteAccount(tid(req), req.body || {});
+    auth.endSession(req, res);
+    res.json({ ok: true });
+  }));
   r.delete('/account/sessions/:sessionId', h((req, res) => {
     if (req.params.sessionId === req.sessionId) throw new HttpError(400, 'Para cerrar esta sesión usa "Cerrar sesión".');
     auth.revokeSession(tid(req), req.params.sessionId);

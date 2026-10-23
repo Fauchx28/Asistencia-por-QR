@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de tratamiento de datos · Asistencia QR</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .doc { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 18px; }
+    .doc h1 { font-size: 30px; }
+    .doc h2 { font-size: 19px; margin-top: 10px; }
+    .doc p, .doc li { line-height: 1.6; color: var(--ink-2); }
+    .doc ul, .doc ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+    .fill { background: var(--late-bg); color: var(--late-ink); font-weight: 700; padding: 0 4px; border-radius: 4px; }
+    .fill.ok { background: none; color: inherit; padding: 0; }
+  </style>
+</head>
+<body>
+  <main class="doc">
+    <a class="brand" href="/" style="padding:0"><span class="brand-mark"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2"/></svg></span>Asistencia QR</a>
+    <div class="notice notice-warn" id="template-note" hidden>
+      <span>Esta es una plantilla de referencia. Quien administre la plataforma debe completar los datos resaltados (variables <code>ORG_NAME</code> y <code>PRIVACY_CONTACT</code>) y revisarla con un abogado antes de usarla con estudiantes reales.</span>
+    </div>
+    <h1>Política de tratamiento de datos personales</h1>
+    <p>En cumplimiento de la Ley 1581 de 2012 y sus decretos reglamentarios, <span class="fill" data-fill="org">[NOMBRE DEL OPERADOR]</span>
+      (en adelante, "el operador"), que administra la plataforma Asistencia QR, informa cómo recoge, usa y protege los datos personales.</p>
+
+    <h2>1. Quién es responsable</h2>
+    <ul>
+      <li><strong>Datos de los docentes:</strong> el operador es el responsable del tratamiento.</li>
+      <li><strong>Datos de los estudiantes:</strong> el colegio al que pertenece cada curso es el responsable. El operador actúa como encargado y solo trata esos datos siguiendo las instrucciones del colegio y para prestar el servicio.</li>
+      <li><strong>Contacto para temas de datos:</strong> <span class="fill" data-fill="contact">[CORREO O CANAL DE CONTACTO]</span></li>
+    </ul>
+
+    <h2>2. Qué datos tratamos</h2>
+    <ul>
+      <li><strong>Docentes:</strong> nombre, correo electrónico, contraseña (guardada cifrada, nadie puede leerla), fecha de aceptación de esta política y datos técnicos de las sesiones (tipo de dispositivo, dirección IP y fechas de ingreso).</li>
+      <li><strong>Estudiantes:</strong> nombre completo, número de documento (opcional), un código interno y los registros de asistencia (fecha, hora y estado). No se guardan fotografías, datos de salud ni otros datos sensibles.</li>
+      <li>El código QR de cada carné contiene solo un identificador aleatorio; no incluye el nombre ni el documento del estudiante.</li>
+    </ul>
+
+    <h2>3. Para qué los usamos</h2>
+    <ol>
+      <li>Registrar y consultar la asistencia diaria de los estudiantes.</li>
+      <li>Generar los carnés con código QR.</li>
+      <li>Producir y enviar los reportes semanales de asistencia a los correos que el colegio o el docente configuren.</li>
+      <li>Permitir el ingreso seguro de los docentes y la recuperación de su contraseña.</li>
+    </ol>
+    <p>Los datos no se venden ni se usan con fines publicitarios.</p>
+
+    <h2>4. Datos de niños, niñas y adolescentes</h2>
+    <p>El tratamiento de datos de menores responde a su interés superior y se limita a lo necesario para el control de asistencia escolar.
+      Antes de registrar a los estudiantes, el colegio debe contar con la autorización de sus padres o acudientes. La plataforma incluye un
+      <a href="/autorizacion-acudientes.html">formato de autorización</a> que el colegio puede imprimir y hacer firmar.</p>
+
+    <h2>5. Derechos de los titulares</h2>
+    <p>Los docentes, y los padres o acudientes en nombre de los estudiantes, pueden:</p>
+    <ul>
+      <li>Conocer, actualizar y rectificar sus datos.</li>
+      <li>Pedir prueba de la autorización otorgada.</li>
+      <li>Saber qué uso se ha dado a sus datos.</li>
+      <li>Revocar la autorización y pedir que los datos se eliminen, cuando no exista un deber legal de conservarlos.</li>
+      <li>Presentar quejas ante la Superintendencia de Industria y Comercio.</li>
+    </ul>
+    <p>Los docentes pueden eliminar su cuenta en cualquier momento desde <strong>Mi cuenta → Eliminar mi cuenta</strong>; esto borra también sus cursos, estudiantes y registros.</p>
+
+    <h2>6. Cómo presentar consultas y reclamos</h2>
+    <ul>
+      <li>Escriba a <span class="fill" data-fill="contact">[CORREO O CANAL DE CONTACTO]</span>. Las solicitudes sobre datos de estudiantes también pueden presentarse directamente ante el colegio.</li>
+      <li><strong>Consultas:</strong> se responden en máximo 10 días hábiles, prorrogables por 5 días hábiles más, informando el motivo.</li>
+      <li><strong>Reclamos</strong> (corrección, actualización o supresión): se resuelven en máximo 15 días hábiles, prorrogables por 8 días hábiles más, informando el motivo.</li>
+    </ul>
+
+    <h2>7. Seguridad y conservación</h2>
+    <ul>
+      <li>Las contraseñas se guardan cifradas y las sesiones se protegen con cookies seguras; la plataforma debe usarse siempre por HTTPS.</li>
+      <li>Cada docente solo puede ver los cursos que creó.</li>
+      <li>Se hacen copias de seguridad periódicas de la base de datos.</li>
+      <li>Los datos se conservan mientras la cuenta esté activa o mientras el colegio los necesite para sus fines académicos.</li>
+    </ul>
+
+    <h2>8. Proveedores</h2>
+    <p>Para funcionar, la plataforma usa un proveedor de alojamiento web y un servicio de envío de correo, que pueden estar ubicados fuera de Colombia.
+      Ambos tratan los datos únicamente para prestar ese servicio.</p>
+
+    <h2>9. Vigencia</h2>
+    <p>Esta política rige desde <span class="fill" data-fill="date">[FECHA DE PUBLICACIÓN]</span>. Los cambios importantes se informarán a los docentes dentro de la plataforma.</p>
+  </main>
+  <script>
+    (async () => {
+      let cfg = {};
+      try { cfg = (await (await fetch('/api/auth/me')).json()).config || {}; } catch { /* sin conexión */ }
+      const values = { org: cfg.org_name, contact: cfg.privacy_contact };
+      let missing = false;
+      document.querySelectorAll('[data-fill]').forEach((el) => {
+        const v = values[el.dataset.fill];
+        if (v) { el.textContent = v; el.classList.add('ok'); } else if (el.dataset.fill !== 'date') missing = true;
+      });
+      document.getElementById('template-note').hidden = !missing;
+    })();
+  </script>
+</body>
+</html>

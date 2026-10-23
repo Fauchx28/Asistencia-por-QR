@@ -105,6 +105,7 @@ function openDatabase(file) {
     if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
   };
   addColumn('teachers', 'last_login_at', 'INTEGER');
+  addColumn('teachers', 'accepted_terms_at', 'INTEGER');
 
   // Ejecuta fn dentro de una transacción; revierte si lanza un error.
   db.transaction = (fn) => {

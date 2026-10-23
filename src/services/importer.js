@@ -41,7 +41,10 @@ let workerPromise = null;
 function getOcrWorker() {
   if (!workerPromise) {
     const { createWorker } = require('tesseract.js');
-    workerPromise = createWorker(process.env.OCR_LANG || 'spa').catch((err) => {
+    // El idioma se descarga una vez y queda guardado en OCR_CACHE_DIR (por defecto ./data).
+    const cachePath = process.env.OCR_CACHE_DIR || require('node:path').join(__dirname, '..', '..', 'data');
+    require('node:fs').mkdirSync(cachePath, { recursive: true });
+    workerPromise = createWorker(process.env.OCR_LANG || 'spa', 1, { cachePath }).catch((err) => {
       workerPromise = null;
       throw err;
     });
@@ -115,4 +118,10 @@ async function importStudents({ buffer, filename = '', mimetype = '', text }) {
   return { source, students };
 }
 
-module.exports = { importStudents };
+async function closeOcr() {
+  if (!workerPromise) return;
+  try { (await workerPromise).terminate(); } catch { /* nada */ }
+  workerPromise = null;
+}
+
+module.exports = { importStudents, closeOcr };

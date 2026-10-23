@@ -33,10 +33,11 @@ function whoIs(auth, cookie) {
   return req;
 }
 
-const NEW = { name: 'Laura Rendón', email: 'Laura@Colegio.edu', password: 'secreta123', password_confirm: 'secreta123' };
+const NEW = { name: 'Laura Rendón', email: 'Laura@Colegio.edu', password: 'secreta123', password_confirm: 'secreta123', accept_terms: true };
 
 test('registro: valida datos y no permite correos repetidos', () => {
   const { auth } = setup();
+  assert.throws(() => auth.register({ ...NEW, accept_terms: false }), /política de tratamiento/);
   assert.throws(() => auth.register({ ...NEW, password: '123', password_confirm: '123' }), /al menos 8/);
   assert.throws(() => auth.register({ ...NEW, password_confirm: 'otra' }), /no coinciden/);
   assert.throws(() => auth.register({ ...NEW, email: 'mal' }), /correo/);
@@ -154,4 +155,20 @@ test('descripción del dispositivo', () => {
   assert.equal(describeAgent(UA_ANDROID), 'Chrome en Android');
   assert.equal(describeAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1'), 'Safari en iPhone');
   assert.equal(describeAgent(''), 'Navegador');
+});
+
+test('eliminar cuenta borra cursos, estudiantes y asistencias', () => {
+  const { db, auth } = setup();
+  const t = auth.register(NEW);
+  const other = auth.register({ ...NEW, email: 'otro@colegio.edu' });
+  const c = db.prepare("INSERT INTO courses (teacher_id, name) VALUES (?, '5° B')").run(t.id).lastInsertRowid;
+  db.prepare("INSERT INTO students (course_id, full_name, code, qr_token) VALUES (?, 'Ana', 'EST-1', 'tok')").run(c);
+  db.prepare("INSERT INTO courses (teacher_id, name) VALUES (?, '6° A')").run(other.id);
+  signIn(auth, t.id);
+  assert.throws(() => auth.deleteAccount(t.id, { password: 'mala', confirm: 'ELIMINAR' }), /contraseña/);
+  assert.throws(() => auth.deleteAccount(t.id, { password: 'secreta123', confirm: 'no' }), /ELIMINAR/);
+  auth.deleteAccount(t.id, { password: 'secreta123', confirm: 'eliminar' });
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM courses').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM students').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM auth_sessions WHERE teacher_id = ?').get(t.id).n, 0);
 });

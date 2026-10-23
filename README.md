@@ -45,7 +45,7 @@ Para desarrollo con recarga automática: `npm run dev`. Pruebas: `npm test`.
 Los navegadores solo permiten la cámara en **https** o en `localhost`. Para probar desde tu celular en la misma red:
 
 - **Rápido:** usa un túnel con HTTPS, por ejemplo `npx cloudflared tunnel --url http://localhost:3000` o `ngrok http 3000`, y abre en el celular la dirección `https://…` que te da.
-- **En producción:** publícalo en un hosting con HTTPS (Render, Railway, un VPS con Nginx + Let's Encrypt…) y pon `TRUST_PROXY=true`, `COOKIE_SECURE=true` y `APP_URL=https://tu-dominio` en el `.env`.
+- **En producción:** publícalo en un hosting con HTTPS y disco persistente. La guía paso a paso (Railway, Render o un servidor propio con Docker) está en [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
 
 ## Correo semanal
 
@@ -70,7 +70,40 @@ vuelva a encender ese mismo día. Nunca envía dos veces la misma semana. Tambi�
 - El QR contiene solo un token aleatorio, no datos del estudiante. Si un carné se pierde, "Generar nuevo QR" invalida el anterior.
 - Cada docente solo ve sus cursos. Contraseñas con `scrypt`; sesión en cookie `HttpOnly` (ver "Cuentas y sesiones").
 - Quitar un estudiante lo oculta de las listas pero conserva su historial.
-- Toda la información queda en `data/asistencia.db`: haz copia de ese archivo regularmente.
+- Toda la información queda en `data/asistencia.db` (ver "Copias de seguridad").
+
+## Copias de seguridad
+
+- La app crea una copia **cada día a las 2:00 am** (`BACKUP_TIME`) y otra al arrancar si la última tiene más de 24 horas.
+  Se guardan en `data/backups` (`BACKUP_DIR`) y se conservan las últimas 14 (`BACKUP_KEEP`). Cada copia se verifica al crearla.
+- **Copia manual:** `npm run backup`.
+- **Restaurar:** detén la app y ejecuta `npm run restore -- data/backups/asistencia-AAAA-MM-DD-HH-MM.db`. Sin argumentos muestra las copias disponibles.
+  Antes de restaurar guarda la base actual como `asistencia.db.antes-de-restaurar-…`.
+- **Fuera del servidor:** los correos en `ADMIN_EMAILS` ven en *Mi cuenta → Copias de seguridad* la lista de copias y pueden descargarlas.
+  Descarga una por semana y guárdala en otro lugar.
+- No copies a mano solo `asistencia.db` con la app encendida: puede quedar incompleta. Usa `npm run backup`.
+
+## Protección de datos personales
+
+En Colombia los datos de los estudiantes están protegidos por la Ley 1581 de 2012, con reglas especiales para menores de edad. La app incluye:
+
+- **Política de tratamiento de datos** en `/privacidad.html`. Completa `ORG_NAME` y `PRIVACY_CONTACT` en el `.env`; mientras falten, la página avisa que es una plantilla.
+- **Aceptación obligatoria** de la política al crear la cuenta (queda registrada la fecha).
+- **Formato de autorización para acudientes** en `/autorizacion-acudientes.html`, listo para imprimir y firmar antes de registrar a los estudiantes.
+  Se enlaza desde la pantalla de crear curso.
+- **Eliminar mi cuenta** en *Mi cuenta*: borra la cuenta con sus cursos, estudiantes y asistencias (derecho de supresión).
+- Se guarda lo mínimo: nombre, documento opcional y asistencia. El QR no contiene datos personales.
+
+Estas páginas son plantillas de referencia: revísalas con un abogado o con el área jurídica del colegio antes de usarlas con estudiantes reales.
+
+## Pruebas
+
+- `npm test`: lógica de cuentas, sesiones, asistencia, reportes y copias de seguridad (no necesita internet).
+- `npm run test:e2e`: prueba completa con las librerías reales. Importa un Excel, un CSV y una foto (`test/fixtures/lista-foto.jpg`, con Tesseract),
+  genera y **decodifica** un QR, descarga los carnés en PDF y el ZIP, escanea, cierra el día, revisa el Excel semanal celda por celda,
+  envía el reporte y el enlace de recuperación (en modo `SMTP_HOST=json`, sin enviar correos reales), crea y descarga una copia de seguridad y elimina la cuenta.
+- En GitHub, **cada push a `main` corre ambas pruebas** (`.github/workflows/pruebas.yml`). El resultado se ve en la pestaña *Actions*
+  y también se publica en la rama `ci-resultados` (archivo `ESTADO.txt` y salida completa).
 
 ## Estructura
 
@@ -79,6 +112,7 @@ server.js                 Arranque del servidor Express
 src/db.js                 Esquema SQLite
 src/auth.js               Cuentas, sesiones, límite de intentos y recuperación de contraseña
 src/mailer.js             Envío de correos (SMTP)
+src/backup.js             Copias de seguridad automáticas y verificación
 src/api.js                Rutas /api
 src/scheduler.js          Envío automático semanal
 src/util.js               Fechas, CSV y limpieza de nombres
@@ -89,7 +123,11 @@ src/services/
   importer.js             Excel, CSV, texto y foto (Tesseract)
   qr.js                   QR en PNG, PDF de carnés y ZIP
 public/                   Interfaz (HTML, CSS y JavaScript sin frameworks)
-test/                     Pruebas de la lógica
+scripts/                  npm run backup / npm run restore
+test/                     Pruebas de la lógica y prueba completa (e2e)
+docs/DESPLIEGUE.md        Cómo publicar con HTTPS
+Dockerfile                Imagen para el hosting
+.github/workflows/        Pruebas automáticas en GitHub
 ```
 
 ## API principal
@@ -98,6 +136,10 @@ test/                     Pruebas de la lógica
 |---|---|---|
 | POST | `/api/auth/register` · `/api/auth/login` · `/api/auth/logout` | Registro e ingreso (`remember: true` = recordarme) |
 | GET | `/api/auth/me` | Docente de la sesión actual y configuración pública |
+| GET | `/api/health` | Estado del servicio (para el hosting) |
+| DELETE | `/api/account` | Eliminar la cuenta (`{ password, confirm: "ELIMINAR" }`) |
+| GET/POST | `/api/admin/backups` | Listar / crear copias de seguridad (solo `ADMIN_EMAILS`) |
+| GET | `/api/admin/backups/:nombre` | Descargar una copia (solo `ADMIN_EMAILS`) |
 | POST | `/api/auth/forgot` · `/api/auth/reset` | Recuperar contraseña |
 | GET/PUT | `/api/account` | Mi cuenta (perfil y sesiones abiertas) |
 | PUT | `/api/account/password` | Cambiar contraseña |
