@@ -1,0 +1,112 @@
+
+> asistencia-qr@0.3.0 test:e2e
+> node --disable-warning=ExperimentalWarning --test --test-timeout=180000 test/e2e.test.js
+
+TAP version 13
+# Subtest: flujo completo con librerías reales
+    # Subtest: servidor, páginas y salud
+    ok 1 - servidor, páginas y salud
+      ---
+      duration_ms: 54.456718
+      type: 'test'
+      ...
+    # Subtest: registro de la primera vez
+    ok 2 - registro de la primera vez
+      ---
+      duration_ms: 58.096986
+      type: 'test'
+      ...
+    # Subtest: rechaza peticiones de otros sitios
+    ok 3 - rechaza peticiones de otros sitios
+      ---
+      duration_ms: 2.582703
+      type: 'test'
+      ...
+    # Subtest: importar Excel (.xlsx)
+    ok 4 - importar Excel (.xlsx)
+      ---
+      duration_ms: 52.646419
+      type: 'test'
+      ...
+    # Subtest: importar CSV y texto pegado
+    ok 5 - importar CSV y texto pegado
+      ---
+      duration_ms: 8.326153
+      type: 'test'
+      ...
+    # Subtest: leer nombres de una foto (Tesseract)
+    ok 6 - leer nombres de una foto (Tesseract)
+      ---
+      duration_ms: 740.848061
+      type: 'test'
+      ...
+    # Subtest: crear curso con estudiantes
+    ok 7 - crear curso con estudiantes
+      ---
+      duration_ms: 4.316167
+      type: 'test'
+      ...
+    # Subtest: el QR en PNG se puede escanear y contiene el token
+    ok 8 - el QR en PNG se puede escanear y contiene el token
+      ---
+      duration_ms: 73.928654
+      type: 'test'
+      ...
+    # Subtest: carnés en PDF y QR en ZIP
+    ok 9 - carnés en PDF y QR en ZIP
+      ---
+      duration_ms: 212.145818
+      type: 'test'
+      ...
+    # Subtest: escaneo, repetido, código inválido y cierre del día
+    ok 10 - escaneo, repetido, código inválido y cierre del día
+      ---
+      duration_ms: 16.91446
+      type: 'test'
+      ...
+    # Subtest: Excel semanal con los datos correctos
+    ok 11 - Excel semanal con los datos correctos
+      ---
+      duration_ms: 16.929623
+      type: 'test'
+      ...
+    # Subtest: envío del reporte por correo con el Excel adjunto
+    ok 12 - envío del reporte por correo con el Excel adjunto
+      ---
+      duration_ms: 28.658185
+      type: 'test'
+      ...
+    # Subtest: recuperar contraseña por correo
+    ok 13 - recuperar contraseña por correo
+      ---
+      duration_ms: 177.624704
+      type: 'test'
+      ...
+    # Subtest: el administrador crea y descarga copias de seguridad
+    ok 14 - el administrador crea y descarga copias de seguridad
+      ---
+      duration_ms: 20.86123
+      type: 'test'
+      ...
+    # Subtest: eliminar la cuenta borra todo
+    ok 15 - eliminar la cuenta borra todo
+      ---
+      duration_ms: 25.511831
+      type: 'test'
+      ...
+    1..15
+ok 1 - flujo completo con librerías reales
+  ---
+  duration_ms: 1725.562681
+  type: 'test'
+  ...
+# OCR leyó: Andrés Bermúdez Soto | Camila Castaño Vélez | Daniel Escobar Ruiz | Mariana Gómez Ríos | Juan David Hurtado | Sofía Londoño Gil | Nicolás Muñoz Paz | Valentina Ortiz Mejía
+1..1
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1776.834027

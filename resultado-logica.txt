@@ -1,0 +1,146 @@
+
+> asistencia-qr@0.3.0 test
+> node --disable-warning=ExperimentalWarning --test test/services.test.js test/auth.test.js test/backup.test.js
+
+TAP version 13
+# Subtest: registro: valida datos y no permite correos repetidos
+ok 1 - registro: valida datos y no permite correos repetidos
+  ---
+  duration_ms: 43.713231
+  type: 'test'
+  ...
+# Subtest: registro con código del colegio
+ok 2 - registro con código del colegio
+  ---
+  duration_ms: 40.474308
+  type: 'test'
+  ...
+# Subtest: ingreso y límite de intentos fallidos
+ok 3 - ingreso y límite de intentos fallidos
+  ---
+  duration_ms: 340.227211
+  type: 'test'
+  ...
+# Subtest: sesión normal vs. "recordarme" y expiración por inactividad
+ok 4 - sesión normal vs. "recordarme" y expiración por inactividad
+  ---
+  duration_ms: 30.362344
+  type: 'test'
+  ...
+# Subtest: Mi cuenta: lista sesiones, cierra una o todas las demás
+ok 5 - Mi cuenta: lista sesiones, cierra una o todas las demás
+  ---
+  duration_ms: 25.595928
+  type: 'test'
+  ...
+# Subtest: otro docente no puede cerrar mis sesiones
+ok 6 - otro docente no puede cerrar mis sesiones
+  ---
+  duration_ms: 48.158764
+  type: 'test'
+  ...
+# Subtest: cambiar contraseña cierra las demás sesiones
+ok 7 - cambiar contraseña cierra las demás sesiones
+  ---
+  duration_ms: 115.658355
+  type: 'test'
+  ...
+# Subtest: recuperar contraseña: enlace de un solo uso que vence en 1 hora
+ok 8 - recuperar contraseña: enlace de un solo uso que vence en 1 hora
+  ---
+  duration_ms: 44.196089
+  type: 'test'
+  ...
+# Subtest: descripción del dispositivo
+ok 9 - descripción del dispositivo
+  ---
+  duration_ms: 0.339582
+  type: 'test'
+  ...
+# Subtest: eliminar cuenta borra cursos, estudiantes y asistencias
+ok 10 - eliminar cuenta borra cursos, estudiantes y asistencias
+  ---
+  duration_ms: 115.147044
+  type: 'test'
+  ...
+# Subtest: crea copias válidas y conserva solo las más recientes
+ok 11 - crea copias válidas y conserva solo las más recientes
+  ---
+  duration_ms: 138.382173
+  type: 'test'
+  ...
+# Subtest: rechaza archivos que no son copias de la aplicación
+ok 12 - rechaza archivos que no son copias de la aplicación
+  ---
+  duration_ms: 2.916517
+  type: 'test'
+  ...
+# Subtest: contraseñas: hash y verificación
+ok 13 - contraseñas: hash y verificación
+  ---
+  duration_ms: 113.644689
+  type: 'test'
+  ...
+# Subtest: fechas en zona horaria del colegio
+ok 14 - fechas en zona horaria del colegio
+  ---
+  duration_ms: 14.649305
+  type: 'test'
+  ...
+# Subtest: importar filas de Excel/CSV con y sin encabezados
+ok 15 - importar filas de Excel/CSV con y sin encabezados
+  ---
+  duration_ms: 1.194671
+  type: 'test'
+  ...
+# Subtest: importar líneas de OCR marca las dudosas
+ok 16 - importar líneas de OCR marca las dudosas
+  ---
+  duration_ms: 1.192218
+  type: 'test'
+  ...
+# Subtest: crear curso con estudiantes y códigos únicos
+ok 17 - crear curso con estudiantes y códigos únicos
+  ---
+  duration_ms: 42.747546
+  type: 'test'
+  ...
+# Subtest: otro docente no puede ver el curso
+ok 18 - otro docente no puede ver el curso
+  ---
+  duration_ms: 78.497932
+  type: 'test'
+  ...
+# Subtest: escaneo: presente, tarde, repetido, otro curso y QR reemplazado
+ok 19 - escaneo: presente, tarde, repetido, otro curso y QR reemplazado
+  ---
+  duration_ms: 41.722951
+  type: 'test'
+  ...
+# Subtest: marcado manual, deshacer y cierre del día
+ok 20 - marcado manual, deshacer y cierre del día
+  ---
+  duration_ms: 41.602038
+  type: 'test'
+  ...
+# Subtest: resumen semanal y estudiante retirado
+ok 21 - resumen semanal y estudiante retirado
+  ---
+  duration_ms: 42.484519
+  type: 'test'
+  ...
+# Subtest: el envío programado no repite semanas ya enviadas
+ok 22 - el envío programado no repite semanas ya enviadas
+  ---
+  duration_ms: 41.021523
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 898.686195
